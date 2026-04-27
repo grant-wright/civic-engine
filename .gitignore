@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Environment variables — NEVER commit these
+backend/.env
+
+# Game save files
+backend/saves/
+
+# Frontend build output
+frontend/dist/
+frontend/node_modules/
+
+# IDE / tools
+.vscode/
+.idea/
+*.swp
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

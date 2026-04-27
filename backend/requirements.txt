@@ -1,0 +1,6 @@
+fastapi[standard]
+python-socketio
+anthropic
+networkx
+pydantic
+python-dotenv
