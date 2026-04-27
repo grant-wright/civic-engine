@@ -12,13 +12,13 @@
 
 ## Checklist
 
-- [ ] **1. Project scaffold + Git init**
+- [x] **1. Project scaffold + Git init**
   Spec ref: `spec.md > Runtime & Deployment > Development (primary target)` and `spec.md > File Structure`
   What to build: Create the full directory structure (civic-engine/backend/, civic-engine/frontend/). Install backend dependencies: `pip install "fastapi[standard]" python-socketio anthropic networkx pydantic`. Scaffold frontend with Vite: `npm create vite@latest civic-engine-frontend -- --template react-ts`, then `npm install @xyflow/react socket.io-client` and `npm install -D openapi-typescript`. Create backend/main.py as a minimal FastAPI app (just the app object and a root endpoint). Create backend/.env with ANTHROPIC_API_KEY and ADMIN_TOKEN placeholders, and backend/.env.example as a safe copy. Create backend/config.py for env var loading. Create backend/requirements.txt. Initialize git repo (`git init`), create .gitignore (excludes .env, saves/, __pycache__/, node_modules/, dist/). Make the first commit.
   Acceptance: `uvicorn main:app --reload` starts on port 8000 without errors. `npm run dev` starts on port 5173 without errors. FastAPI docs page loads at localhost:8000/docs. Vite default page loads at localhost:5173. Git repo has one initial commit.
   Verify: Open localhost:8000/docs in browser — confirm FastAPI interactive docs page loads. Open localhost:5173 — confirm Vite + React default page loads. Run `git log` in terminal — confirm one commit exists.
 
-- [ ] **2. Data models + dev seeding**
+- [x] **2. Data models + dev seeding**
   Spec ref: `spec.md > Game State Data Model` and `spec.md > Admin & Dev Mode > Named scenarios`
   What to build: Write all Pydantic models in backend/game/state.py — GameState, Player, PlayerType, AIDifficulty, CouncilRole, CityMap, MapNode, NodeType, Waypoint, WaypointType, WaypointStatus, CanalSegment, SegmentStatus, RailwaySegment, Metrics, DepartmentBudget, Faction, FactionReaction, Report, ReportOption, ReportType, ReportStatus, RiskLevel, Effect, EffectType, TargetType, Agent, Councillor, CouncillorSkill, Vote, WinState, GameEvent, GameEventType, RailwayParty, RailwayPhase, CanalParty, CanalMania, ParsedCommand. Create backend/game/scenarios.py with a `scenario_fresh_game()` function that returns a valid hardcoded GameState: 6 named district nodes, 2 canal segments (one with a complete stub, one proposed), basic metrics at starting values, 3 players (human Transport + AI Finance + AI Infrastructure), 4 factions with profile text, 12 councillors (4 per role). Create backend/game/__init__.py and backend/api/__init__.py. Create backend/api/admin.py with GET /admin/state endpoint (requires ADMIN_TOKEN query param). Wire the admin router into main.py. Create a module-level `game_state` variable in main.py initialised from `scenario_fresh_game()`.
   Acceptance: GET /admin/state?token=ADMIN_TOKEN returns valid JSON representing the full seeded GameState. FastAPI /docs shows the GameState and all sub-model schemas. All required model fields are present and correctly typed. No import errors on startup.

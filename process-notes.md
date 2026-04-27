@@ -99,6 +99,32 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 ---
 
+## /build
+
+### Step 1: Project scaffold + Git init
+
+**What was built:** Python venv created in `backend/`; all six packages installed (fastapi[standard], python-socketio, anthropic, networkx, pydantic, python-dotenv). Frontend scaffolded with Vite 7 + React-TS template; @xyflow/react, socket.io-client, and openapi-typescript installed (the last required `--legacy-peer-deps` due to Vite 7 shipping TypeScript 6, while openapi-typescript's peer dep declaration still targets ^5). Git initialised at project root; .gitignore excludes `.env`, `venv/`, `node_modules/`, `saves/`, `dist/`, `.claude/`. First commit made.
+
+**Verification:** FastAPI docs page confirmed loading at localhost:8000/docs (title "Civic Engine", version "0.1.0", default tag, GET / endpoint visible). Vite default page confirmed loading at localhost:5173 (HMR demo, counter, Vite + React logos).
+
+**Comprehension check:** Asked why `.env` is gitignored but `.env.example` is committed. Answer: ".env.example is safe to share" — correct. No follow-up needed.
+
+---
+
+### Step 2: Data models + dev seeding
+
+**What was built:** All Pydantic models written in `game/state.py` — 25+ models and enums covering the full game data model (GameState, Player, CityMap, CanalSegment with `@computed_field` status, Councillor, Faction, Effect, Report, Vote, WinState, GameEvent, ParsedCommand, and all supporting enums). `game/store.py` created as shared mutable game state reference to avoid circular imports. `game/scenarios.py` created with `scenario_fresh_game()` seeding: 6 Victorian district nodes, 2 canal segments (seg_01 complete stub Ironbridge Wharf → Millbrook Basin, seg_02 proposed Millbrook Basin → Coppergate Market), 12 councillors (4 per role, with full profiles for Claude system prompts), 4 factions with personality profiles, 3 players (human Transport, AI Finance, AI Infrastructure). `api/admin.py` created with `GET /admin/state` behind ADMIN_TOKEN. `main.py` updated to initialize game state and include admin router.
+
+**Issues encountered:** (1) CityMap referenced Faction before it was defined — resolved by adding `from __future__ import annotations` to allow lazy annotation evaluation. (2) `/admin/state` endpoint initially missing `response_model=GameState` — FastAPI omitted all sub-model schemas from /docs until this was added. Fixed and re-verified.
+
+**Verification:** GET /admin/state returned full GameState JSON with players dict, city_map with nodes and canal_segments (seg_01 status: "complete", seg_02 status: "proposed"), metrics with all headline fields, factions list. Schemas section in /docs showed GameState and all sub-models after adding response_model annotation.
+
+**Comprehension check:** Asked why seg_01's computed `status` appears in the JSON response despite being a `@property` not a field. Answer: "computed_field decorator" — correct. Understood that `@computed_field` promotes a property into the Pydantic schema and JSON output; plain `@property` is invisible to Pydantic.
+
+**Issues encountered:** (1) Backend directory and files were already partially scaffolded from a prior session — no conflict, just picked up where it left off. (2) `openapi-typescript` install failed with ERESOLVE due to TS 6 / peer dep ^5 mismatch — resolved with `--legacy-peer-deps`. (3) Git identity not configured — set globally with Grant's name and email before first commit.
+
+---
+
 ## /checklist
 
 **Build mode:** Step-by-step. Grant chose this deliberately — he's here to learn the stack and the agent workflow, not just ship. Comprehension checks: yes, with notes flagged for post-delivery follow-up. Verification: yes, per-item. Check-in cadence: learning-driven.
