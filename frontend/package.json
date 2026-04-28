@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "generate-types": "openapi-typescript http://localhost:8000/openapi.json -o src/types.ts",
+    "dev": "npm run generate-types && vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -13,6 +14,7 @@
     "@xyflow/react": "^12.10.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-router-dom": "^7.14.2",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
