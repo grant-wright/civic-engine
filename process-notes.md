@@ -147,6 +147,18 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 ---
 
+### Step 4: WebSocket server + game state broadcast
+
+**What was built:** `socketio.AsyncServer` integrated with FastAPI via `socketio.ASGIApp` — both share port 8000. `game/store.py` extended with `connected_clients` dict and `broadcast_game_state()` helper (uses a `_sio` reference assigned by main.py at startup to avoid circular imports). `api/health.py` added with `GET /health`. Socket event handlers implemented: `connect` (no-op), `register` (stores client identity, emits full state targeted to the new sid only), `player_action` (logs MAJOR_DECISION event, broadcasts), `voice_command` (stub), `council_extension` (decrements remaining, adds 30s, nudges polling -2, logs event, broadcasts), `new_game` (resets state preserving generated city map, broadcasts), `disconnect` (logs CONNECTION_LOST, removes from registry). `backend/scripts/test_socket.py` written using stdlib `urllib.request` and `python-socketio` AsyncClient (requires `aiohttp` installed in venv).
+
+**Issues encountered:** (1) Unicode box-drawing characters in test script caused cp1252 encoding error on Windows — replaced with plain ASCII. (2) Test script initially imported `httpx` (not a project dependency) — replaced with stdlib `urllib.request`. (3) `python-socketio` async client requires `aiohttp` as a transport layer — installed in venv (not added to requirements.txt, test-only). (4) Port 8000 was held by the previous session's server — closed manually before restarting.
+
+**Verification:** All 10 test script assertions passed: GET /health → 200, socket connect + register → game_state_update received with turn=1 and council_extensions_remaining=3, council_extension event → broadcast with extensions decremented to 2 and turn_time_limit at 70, disconnect → server still healthy.
+
+**Comprehension check:** Asked why `register` uses targeted `to=sid` emit instead of calling `broadcast_game_state()`. Answer: "Efficiency" — all other connected clients already have the current state; broadcasting on every connect would be redundant. Correct, no follow-up needed.
+
+---
+
 ## /checklist
 
 **Build mode:** Step-by-step. Grant chose this deliberately — he's here to learn the stack and the agent workflow, not just ship. Comprehension checks: yes, with notes flagged for post-delivery follow-up. Verification: yes, per-item. Check-in cadence: learning-driven.
