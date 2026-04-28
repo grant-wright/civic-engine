@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Query
 from config import settings
 from game.state import GameState, CityMap
 import game.store as store
+
+_SAVES_DIR = Path(__file__).parent.parent / "saves"
 
 router = APIRouter()
 
@@ -45,6 +49,50 @@ async def generate_map(token: str = Query(...)) -> CityMap:
             (c for c in city_map.councillors if c.role == player.role),
             None,
         )
+        if matching:
+            player.councillor = matching
+
+    return city_map
+
+
+@router.post("/admin/save-map")
+async def save_map(token: str = Query(...), slot: str = Query(default="default")):
+    _require_admin(token)
+    if store.game_state is None:
+        raise HTTPException(status_code=503, detail="Game state not initialised")
+
+    _SAVES_DIR.mkdir(exist_ok=True)
+    save_path = _SAVES_DIR / f"map_{slot}.json"
+    city_map = store.game_state.city_map
+    save_path.write_text(city_map.model_dump_json())
+
+    return {
+        "saved": str(save_path),
+        "slot": slot,
+        "nodes": len(city_map.nodes),
+        "canal_segments": len(city_map.canal_segments),
+        "factions": len(city_map.factions),
+        "councillors": len(city_map.councillors),
+    }
+
+
+@router.post("/admin/load-map", response_model=CityMap)
+async def load_map(token: str = Query(...), slot: str = Query(default="default")):
+    _require_admin(token)
+    if store.game_state is None:
+        raise HTTPException(status_code=503, detail="Game state not initialised")
+
+    save_path = _SAVES_DIR / f"map_{slot}.json"
+    if not save_path.exists():
+        raise HTTPException(status_code=404, detail=f"No saved map in slot '{slot}'")
+
+    city_map = CityMap.model_validate_json(save_path.read_text())
+
+    store.game_state.city_map = city_map
+    if city_map.factions:
+        store.game_state.factions = city_map.factions
+    for player in store.game_state.players.values():
+        matching = next((c for c in city_map.councillors if c.role == player.role), None)
         if matching:
             player.councillor = matching
 

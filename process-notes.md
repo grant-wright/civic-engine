@@ -125,6 +125,22 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 ---
 
+### Step 3: AI map generation
+
+**What was built:** `backend/claude/__init__.py`, `backend/claude/client.py` (shared `AsyncAnthropic` client, `UsageRecord` dataclass, `usage_log`, `record_usage()`, `safe_claude_call()` with truncation retry), `backend/claude/map_gen.py` (two-phase generation: phase 1 generates nodes + canal_segments + factions; phase 2 generates 12 councillors in a separate focused call). `POST /admin/generate-map`, `GET /admin/usage`, `POST /admin/save-map`, `POST /admin/load-map` endpoints added to `api/admin.py`. `main.py` updated to auto-load `saves/map_default.json` on startup if it exists.
+
+**Issues encountered:**
+1. Original single-call approach: `CityMap` schema marks `councillors` as optional (has a default `[]`), so Claude skipped it entirely and generated factions but not councillors.
+2. Split into two calls: councillor call used `_CouncillorBatch.model_json_schema()` as the tool schema. Claude returned `{}` (empty tool input). Initially suspected schema complexity (`$defs`/`$ref` references), so replaced with a flat inline schema — but the error persisted. Diagnosed via `GET /admin/usage`: `output_tokens` was exactly equal to `max_tokens` on both the primary (4000) and fallback (6000) calls, proving truncation not schema refusal. Fixed by raising to `max_tokens=8000` / `fallback_tokens=12000`.
+3. Map phase was also truncating (3000 limit, needed 4641 tokens). Bumped map phase to `max_tokens=5000` / `fallback_tokens=8000`.
+4. Total generation time: ~4–5 minutes across 4 API calls (two truncated retries). Save/load system added specifically to avoid regeneration during testing and gameplay.
+
+**Verification:** `POST /admin/generate-map` returned 10 nodes (2 PORT, 3 INDUSTRIAL, 3 RESIDENTIAL, 1 COMMERCIAL, 1 MARKET), 6 canal segments, 6 factions with multi-sentence profiles, 12 councillors (4 per role). `POST /admin/save-map?slot=default` confirmed save with all counts. `GET /admin/usage` showed 4 records (2 map_gen, 2 councillor_gen) with correct token counts and cost_usd values.
+
+**Comprehension check:** Asked how we confirmed truncation vs Claude skipping councillors. Answer: "Checked GET /admin/usage" — correct. `output_tokens` exactly matching `max_tokens` is the truncation signature; a natural completion leaves headroom.
+
+---
+
 ## /checklist
 
 **Build mode:** Step-by-step. Grant chose this deliberately — he's here to learn the stack and the agent workflow, not just ship. Comprehension checks: yes, with notes flagged for post-delivery follow-up. Verification: yes, per-item. Check-in cadence: learning-driven.
