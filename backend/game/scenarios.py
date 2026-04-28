@@ -3,6 +3,7 @@ from game.state import (
     GameState, GameStatus, CityMap, MapNode, NodeType, CanalSegment, Waypoint,
     WaypointType, WaypointStatus, Faction, Councillor, CouncillorSkill, CouncilRole,
     Player, PlayerType, AIDifficulty, Agent, Metrics, RailwayParty, CanalParty,
+    Report, ReportOption, ReportType, ReportStatus, RiskLevel,
 )
 
 
@@ -527,6 +528,48 @@ def scenario_fresh_game() -> GameState:
         ),
     }
 
+    seeded_report = Report(
+        report_id="r_seed_01",
+        title="Market Embankment Survey Request",
+        description=(
+            "Contractors have submitted preliminary estimates for the Market Embankment section "
+            "of the Millbrook–Coppergate canal. Before construction can begin, the council must decide "
+            "how thoroughly to survey the ground. A collapsed embankment set the last commission back "
+            "by two years. How shall we proceed?"
+        ),
+        report_type=ReportType.SCHEDULED,
+        addressed_to="p_transport",
+        domain=CouncilRole.TRANSPORT,
+        options=[
+            ReportOption(
+                option_id="opt_01_standard",
+                label="Approve Standard Survey",
+                description="Commission the contractor's standard ground survey. Reliable and fast.",
+                effects=[],
+                risk_level=RiskLevel.LOW,
+            ),
+            ReportOption(
+                option_id="opt_01_enhanced",
+                label="Commission Enhanced Survey",
+                description="A more thorough survey including subsurface drainage assessment. Costs more time but reduces construction risk.",
+                effects=[],
+                risk_level=RiskLevel.MEDIUM,
+            ),
+            ReportOption(
+                option_id="opt_01_skip",
+                label="Proceed Without Survey",
+                description="Skip the survey entirely to save two turns. High risk of embankment failure mid-construction.",
+                effects=[],
+                risk_level=RiskLevel.HIGH,
+            ),
+        ],
+        status=ReportStatus.PENDING,
+        turn_received=1,
+        turn_deadline=3,
+    )
+
+    pending_reports = {"p_transport": [seeded_report]}
+
     return GameState(
         session_id=str(uuid.uuid4()),
         status=GameStatus.LOBBY,
@@ -539,4 +582,5 @@ def scenario_fresh_game() -> GameState:
         factions=factions,
         railway_party=RailwayParty(),
         canal_party=CanalParty(),
+        pending_reports=pending_reports,
     )
