@@ -139,6 +139,12 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 **Comprehension check:** Asked how we confirmed truncation vs Claude skipping councillors. Answer: "Checked GET /admin/usage" — correct. `output_tokens` exactly matching `max_tokens` is the truncation signature; a natural completion leaves headroom.
 
+**Follow-up items for /iterate:**
+1. **Parallel councillor generation** — split the single 12-councillor call into 3 concurrent calls via `asyncio.gather()` (one per role: finance/infrastructure/transport, 4 councillors each). Would cut councillor generation time by ~3× and reduce max_tokens needed per call to ~3000. Token budget per call: 3000/5000. **Quality caveat:** parallel calls don't see each other — risk of personality homogeneity across roles (e.g. all three roles independently generating a "cautious Whig" archetype). Before shipping this change, run a quality comparison: generate a full set under both approaches and compare name variety, political_alignment diversity, value_tension uniqueness, and core_values spread across all 12. The single-call approach has an inherent advantage here; only switch if quality holds up.
+2. **Test save/load fully** — verify `POST /admin/load-map?slot=default` correctly restores all game state (city_map, factions, player councillors) after a server restart. Also test saving to a named slot (e.g. `slot=backup`) and loading it back.
+3. **Toggle generation steps** — add query params to `POST /admin/generate-map` to skip steps: `?include_councillors=false` skips phase 2 (useful for fast map geometry testing), `?include_factions=false` skips faction generation. Lets developers iterate on map layout without waiting for the full 5-minute run.
+4. **Schema drift test** — add a test or startup assertion that the hardcoded `_COUNCILLOR_TOOL_SCHEMA` in `claude/map_gen.py` stays in sync with the Pydantic `Councillor` model. If a field is added to `Councillor`, the flat schema won't update automatically — silent mismatch risk. Could compare field names at import time: `assert set(_COUNCILLOR_TOOL_SCHEMA["properties"]["councillors"]["items"]["required"]) == set(Councillor.model_fields.keys()) - {"decisions_made", "value_aligned_decisions", "milestones_achieved"}`.
+
 ---
 
 ## /checklist
