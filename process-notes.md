@@ -159,6 +159,16 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 ---
 
+### Step 5: Frontend scaffold + socket connection + type generation
+
+**What was built:** `react-router-dom` installed (`--legacy-peer-deps` required, same TS6/openapi-typescript conflict as step 1). `src/socket.ts` — shared socket.io-client instance pointed at localhost:8000 with auto-reconnect. `src/types.ts` — stub placeholder (overwritten by `npm run generate-types` on each dev start). `src/store.ts` — `GameStateProvider` React Context holding live `GameState` mirror (updated on every `game_state_update` socket event) and `PlayerIdentity` read/written from localStorage (defaults: player_transport/transport, new UUID). `src/hooks/useSocket.ts` — registers player identity with backend on socket connect; re-registers if identity changes. `src/hooks/useGameState.ts` — thin hook over `useGameContext`. `src/views/CentralScreen/index.tsx` and `src/views/PlayerPhone/index.tsx` — placeholder divs. `src/App.tsx` rewritten with React Router (`/central`, `/phone`, catch-all redirect to `/central`); `useSocket()` called at app root so registration fires regardless of route. `src/main.tsx` wraps app in `GameStateProvider`. `vite.config.ts` adds `/socket.io` proxy to localhost:8000 (WebSocket-aware). `package.json` scripts: `generate-types` added, `dev` updated to `npm run generate-types && vite`.
+
+**Engagement:** Grant paused before `store.ts` was written to ask for a full explanation of the file. Received walkthrough of TypeScript syntax (type imports, interfaces, generics, `| null`), and the store's role in the architecture. Then asked two follow-up questions: (1) where each layer physically runs (laptop vs browser), and (2) what TypeScript compilation does and why React is called React rather than "HTML functions". Both questions answered in depth before proceeding. Strong conceptual engagement — building mental model of the full stack before writing code.
+
+**Issues encountered:** None. `--legacy-peer-deps` expected and applied without friction.
+
+---
+
 ## /checklist
 
 **Build mode:** Step-by-step. Grant chose this deliberately — he's here to learn the stack and the agent workflow, not just ship. Comprehension checks: yes, with notes flagged for post-delivery follow-up. Verification: yes, per-item. Check-in cadence: learning-driven.
