@@ -1,4 +1,8 @@
 import CityMap from './CityMap'
+import MetricsDash from './MetricsDash'
+import InfluenceMeter from './InfluenceMeter'
+import EventFeed from './EventFeed'
+import VotePanel from './VotePanel'
 
 export default function CentralScreen() {
   return (
@@ -14,17 +18,18 @@ export default function CentralScreen() {
         <CityMap />
       </div>
       <div style={{
-        width: 300,
+        width: 360,
         background: '#1a1b23',
         borderLeft: '1px solid #2e303a',
-        padding: '1rem',
-        color: '#9ca3af',
-        fontSize: 14,
-        overflowY: 'auto',
         flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}>
-        <div style={{ color: '#f3f4f6', fontWeight: 600, marginBottom: 8 }}>Dashboard</div>
-        <p>Metrics, influence meter, and event feed coming in step 7.</p>
+        <VotePanel />
+        <InfluenceMeter />
+        <MetricsDash />
+        <EventFeed />
       </div>
     </div>
   )
