@@ -114,7 +114,7 @@ async def voice_command(sid: str, data: dict):
 
 
 @sio.event
-async def council_extension(sid: str, data: dict):
+async def council_extension(sid: str, data: dict | None = None):
     """
     Payload: {player_id}
     Spends one extension: decrement counter, add 30s to turn limit, nudge polling down.
@@ -131,16 +131,17 @@ async def council_extension(sid: str, data: dict):
     gs.metrics.election_polling = max(0.0, gs.metrics.election_polling - 2.0)
     gs.current_turn_extended = True
 
+    payload = data or {}
     event = GameEvent(
         event_id=str(uuid.uuid4()),
         event_type=GameEventType.COUNCIL_EXTENSION,
         turn=gs.turn,
         cycle=gs.cycle,
         description=(
-            f"{data.get('player_id', 'a councillor')} called a council extension. "
+            f"{payload.get('player_id', 'a councillor')} called a council extension. "
             f"{gs.council_extensions_remaining} remaining."
         ),
-        player_id=data.get("player_id"),
+        player_id=payload.get("player_id"),
         data={"remaining": gs.council_extensions_remaining},
     )
     gs.event_log.append(event)

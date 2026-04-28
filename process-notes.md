@@ -165,7 +165,51 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 **Engagement:** Grant paused before `store.ts` was written to ask for a full explanation of the file. Received walkthrough of TypeScript syntax (type imports, interfaces, generics, `| null`), and the store's role in the architecture. Then asked two follow-up questions: (1) where each layer physically runs (laptop vs browser), and (2) what TypeScript compilation does and why React is called React rather than "HTML functions". Both questions answered in depth before proceeding. Strong conceptual engagement — building mental model of the full stack before writing code.
 
-**Issues encountered:** None. `--legacy-peer-deps` expected and applied without friction.
+**Verification:** `npm run dev` passed after renaming `store.ts` → `store.tsx` (JSX in a `.ts` file caused a parse error). Browser refresh required to capture socket connection in DevTools Network tab — expected. Socket polling visible in Network WS filter and in uvicorn backend terminal. React DevTools installed during this step; GameStateProvider Context confirmed showing live gameState after refresh.
+
+**Comprehension check:** Asked which statement is true about game state when `/central` and `/phone` are open in separate tabs. Answer: "Shared — one object, both tabs read from it" — incorrect. Correct answer: each tab runs its own independent React app with its own copy of gameState, both updated independently by backend broadcasts. Explanation given: no shared memory between browser tabs; the backend is the single source of truth that keeps them in sync.
+
+**Issues encountered:** `store.ts` → `store.tsx` rename required (JSX parse error). `--legacy-peer-deps` expected and applied without friction.
+
+---
+
+### Step 6: Central screen city map (React Flow)
+
+**What was built:** `src/components/DistrictNode.tsx` (custom React Flow node — district name, colour-coded node_type badge, railway station and canal wharf indicators), `src/components/WaypointMarker.tsx` (SVG circle rendered along edge paths, colour-coded by waypoint status with native browser tooltip via `<title>`), `src/components/CanalEdge.tsx` (custom React Flow edge — straight path via `getStraightPath`/`BaseEdge`, colour-coded by segment status, dashed for proposed, waypoint markers interpolated along path using `t = (i+1)/(length+1)`), `src/components/RailwayEdge.tsx` (dark iron-red edge, no waypoint detail). `src/views/CentralScreen/CityMap.tsx` maps `city_map.nodes` → React Flow nodes and `canal_segments`/`railway_segments` → React Flow edges; `edgeHandles()` computes which side of each node an edge should enter/exit by comparing normalised node positions; `ConnectionMode.Loose` allows source-to-source handle connections. `src/views/CentralScreen/index.tsx` updated to two-column layout (map left, dashboard placeholder right) using `position: fixed; inset: 0` to bypass the `#root` width constraint.
+
+**Verification:** Map visible at localhost:5173/central with district nodes, canal edges, and waypoint dots. Complete segments showing green waypoints confirmed. Pan and zoom working.
+
+**Issues encountered:** (1) Nodes initially too large, obscuring edges — reduced padding, font size, minWidth. (2) Edges connecting at top/bottom only — added handles at all four sides of DistrictNode with IDs (top/right/bottom/left) and `edgeHandles()` direction computation in CityMap.tsx.
+
+**Comprehension check:** Asked how CityMap.tsx decides which side of a node an edge exits from. Answer: "edgeHandles() compares node positions" — correct.
+
+**Iterate flag:** Grant noted the map could be visually improved further. Saved to memory for /iterate (candidate improvements: bezier edge routing, minimap, zoom-level-aware labels).
+
+### Step 7: Central screen full dashboard
+
+**What was built:** Four new components wired into the CentralScreen right panel. `MetricsDash.tsx` — three headline metric bars (Road Rage, Canal Efficiency, Aesthetic) with colour coding reflecting value direction (Road Rage red when high; Efficiency/Aesthetic green when high), a quarterly stats grid (citizen happiness, horse pollution, accidents, projects delayed, tradies non-billing), department budget figures, and a row of summary chips for polling, economy, and cycle. `InfluenceMeter.tsx` — two labelled progress bars (Canal Party blue, Railway Party red), both 0–100 scale, with "APPROACHING CROSSOVER" amber banner within 10 points and "RAILWAY CRISIS" red banner when railway overtakes canal; shows railway phase and activation threshold. `EventFeed.tsx` — scrollable list of `game_state.event_log` entries rendered newest-first using `[...event_log].reverse()`; each row shows a colour-coded dot by event type (milestones gold, crises red, agent events green/red, extensions amber, default grey), turn/cycle stamp, and description. `VotePanel.tsx` — conditionally rendered when `pending_vote` is non-null; shows vote options with current tally and mayor tiebreaker badge; returns `null` when no vote is active. `CentralScreen/index.tsx` updated: dashboard panel widened from 300px to 360px, rebuilt as a flex column with VotePanel → InfluenceMeter → MetricsDash → EventFeed (EventFeed takes flex: 1 and scrolls).
+
+**Issue encountered:** `EventFeed.tsx` used `import { components } from '../../types'` — TypeScript interfaces have no runtime value, so Vite threw "does not provide an export named 'components'". Fixed with `import type { components }`.
+
+**Verification:** Grant confirmed the dashboard rendered correctly — MetricsDash showing all metrics and budgets, InfluenceMeter showing Canal at 50 and Railway at 20 with no crisis banner, EventFeed showing event count (empty or connection event from seed), VotePanel not visible (no pending_vote in fresh scenario).
+
+**Comprehension check:** Asked how VotePanel takes up no space when there's no active vote. Answer: "Returns null" — correct. Explained: `return null` means React renders nothing and the component has no DOM presence. `display: none` would still occupy layout space.
+
+---
+
+### Step 8: Player phone (ReportQueue + ReportCard + AgentRoster + TurnTimer + ExtensionButton + VoiceButton stub)
+
+**What was built:** Seven new files under `src/views/PlayerPhone/`. `index.tsx` — full layout replacing the placeholder: header with role badge and councillor name, controls row (TurnTimer + ExtensionButton + VoiceButton), ReportQueue list, and conditional ReportCard when a report is selected. `ReportQueue.tsx` — filters `pending_reports[player_id]` to PENDING status, sorts urgent-first then by turn_deadline, shows title/domain badge/urgency indicator/defer_count badge. `ReportCard.tsx` — full report detail with options filtered by councillor skill level (min_skill_level check against councillor.skills); buttons: Choose (emits player_action), Delegate (opens AgentRoster modal), Defer (only if not urgent and defer_count < 2), Flag for Council. `AgentRoster.tsx` — fixed-position modal listing player agents with name, specialisations, risk profile label, track record, hiring cost. `TurnTimer.tsx` — listens for `turn_started` socket event; starts setInterval countdown; falls back to static `turn_time_limit` display until step 9 activates it. `ExtensionButton.tsx` — reads council_extensions_remaining from game state, disabled at 0, emits council_extension with player_id payload. `VoiceButton.tsx` — mic button stub showing "Voice commands coming in step 11" tooltip on press. Backend: added one seeded Report (Market Embankment Survey Request, 3 options, LOW/MEDIUM/HIGH risk) to `scenario_fresh_game()` for verification; fixed `council_extension` socket handler to accept optional data (`data: dict | None = None`).
+
+**Issues encountered:** (1) `player_id` localStorage default was `'player_transport'` but scenario uses `'p_transport'` — required clearing localStorage and fixing the default in `store.tsx`. (2) `socket.emit('council_extension')` sent no payload; Python handler required a `data` argument — crashed with `TypeError: council_extension() missing 1 required positional argument: 'data'`. Fixed by making `data` optional on the server and sending `{ player_id }` from the client.
+
+**Verification:** Grant confirmed: report queue visible with seeded report, ReportCard opens with 3 options on tap, Choose emits `player_action`, ExtensionButton decremented from (3) to (2), COUNCIL_EXTENSION event appeared in EventFeed on /central. Councillor name showing as Claude-generated "Obadiah Fenn" (not hardcoded "Lord William Trentham") — expected, generate-map from step 3 updated player councillors and server has maintained that state.
+
+**Grant's verification observation:** "Events(1) — C1 T1 council extension — p_transport called a council extension. 2 remaining." Correct. The MAJOR_DECISION event from the earlier Choose press was wiped by uvicorn hot-reload when main.py was fixed; only the post-fix council_extension survived.
+
+**Comprehension check:** Asked why the server threw `TypeError: council_extension() missing 1 required positional argument: 'data'`. Answer: "socket.emit sent no payload" — correct. Python-socketio called the handler with only `sid`; the signature required a second argument `data`.
+
+**Layout flag:** EventFeed on /central only visible after significant browser zoom-out — MetricsDash is consuming most of the right panel height. Flagged for /iterate alongside the existing city map visual polish flag.
 
 ---
 

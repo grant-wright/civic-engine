@@ -24,7 +24,7 @@ function loadIdentity(): PlayerIdentity {
     localStorage.setItem('session_id', session_id)
   }
   return {
-    player_id: localStorage.getItem('player_id') ?? 'player_transport',
+    player_id: localStorage.getItem('player_id') ?? 'p_transport',
     role: localStorage.getItem('role') ?? 'transport',
     session_id,
   }
