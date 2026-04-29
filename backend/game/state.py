@@ -93,6 +93,7 @@ class TargetType(str, Enum):
     FREIGHT_CANAL = "freight_canal"
     FREIGHT_RAIL = "freight_rail"
     CYCLE_INCOME = "cycle_income"
+    REPORT = "report"
 
 class ReportType(str, Enum):
     SCHEDULED = "scheduled"

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useGameContext } from '../../store'
 import ReportQueue from './ReportQueue'
 import ReportCard from './ReportCard'
@@ -29,6 +29,14 @@ export default function PlayerPhone() {
   const selectedReport = myReports.find(r => r.report_id === selectedReportId) ?? null
   const roleColor = ROLE_COLORS[player.role] ?? '#6b7280'
 
+  // Auto-close ReportCard when the selected report is no longer pending
+  // (covers voice dispatch, manual click, and AI deciding the report)
+  useEffect(() => {
+    if (selectedReport && selectedReport.status !== 'pending') {
+      setSelectedReportId(null)
+    }
+  }, [selectedReport?.status])
+
   function toggleReport(id: string) {
     setSelectedReportId(prev => prev === id ? null : id)
   }
@@ -53,7 +61,7 @@ export default function PlayerPhone() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <TurnTimer />
           <ExtensionButton />
-          <VoiceButton />
+          <VoiceButton reportId={selectedReportId} />
         </div>
       </div>
 

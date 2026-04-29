@@ -101,6 +101,33 @@ async def register(sid: str, data: dict):
     await sio.emit("game_state_update", payload, to=sid)
 
 
+def _decide_report(
+    gs, player_id: str, report_id: str, option_id: str
+) -> tuple[str, str, str]:
+    """
+    Apply a choose-option action: schedule effects, mark report DECIDED.
+    Returns (actor_name, chosen_label, report_title).
+    """
+    player = gs.players.get(player_id)
+    actor_name = player.councillor.name if player else (player_id or "unknown")
+    chosen_label = option_id
+    report_title = report_id
+
+    for report in gs.pending_reports.get(player_id, []):
+        if report.report_id == report_id:
+            report_title = report.title
+            for opt in report.options:
+                if opt.option_id == option_id:
+                    chosen_label = opt.label
+                    for e in opt.effects:
+                        gs.pending_effects.append((gs.turn + e.delay_turns, e))
+                    report.status = ReportStatus.DECIDED
+                    report.decision = option_id
+            break
+
+    return actor_name, chosen_label, report_title
+
+
 @sio.event
 async def player_action(sid: str, data: dict):
     """
@@ -115,25 +142,9 @@ async def player_action(sid: str, data: dict):
     target_id = data.get("target_id", "")
     option_id = data.get("option_id", "")
 
-    # Apply chosen option's effects; graceful no-op if report/option not found
-    chosen_label = option_id  # fallback to raw id if not resolved
-    report_title = target_id
-    for report in gs.pending_reports.get(player_id, []):
-        if report.report_id == target_id:
-            report_title = report.title
-            for opt in report.options:
-                if opt.option_id == option_id:
-                    chosen_label = opt.label
-                    for e in opt.effects:
-                        gs.pending_effects.append((gs.turn + e.delay_turns, e))
-                    report.status = ReportStatus.DECIDED
-                    report.decision = option_id
-            break
+    actor_name, chosen_label, report_title = _decide_report(gs, player_id, target_id, option_id)
 
-    player = gs.players.get(player_id)
-    actor_name = player.councillor.name if player else (player_id or "unknown")
-
-    event = GameEvent(
+    gs.event_log.append(GameEvent(
         event_id=str(uuid.uuid4()),
         event_type=GameEventType.MAJOR_DECISION,
         turn=gs.turn,
@@ -141,16 +152,71 @@ async def player_action(sid: str, data: dict):
         description=f"{actor_name} chose '{chosen_label}' on '{report_title}'",
         player_id=player_id,
         data=data,
-    )
-    gs.event_log.append(event)
-
+    ))
     await store.broadcast_game_state()
 
 
 @sio.event
 async def voice_command(sid: str, data: dict):
-    """Stub — logs and ignores. Full implementation in step 11."""
-    pass
+    """
+    Payload: {player_id, transcript, report_id}
+    Parses the transcript via Claude, then dispatches as a game action.
+    Emits voice_clarification back to the caller if intent is ambiguous.
+    """
+    if store.game_state is None:
+        return
+
+    from claude.voice import parse_voice_command
+
+    gs = store.game_state
+    player_id = data.get("player_id", "")
+    transcript = data.get("transcript", "")
+    report_id = data.get("report_id")
+
+    if not transcript or not player_id:
+        return
+
+    cmd = await parse_voice_command(transcript, player_id, report_id, gs)
+    if cmd is None:
+        return
+
+    if cmd.clarification_needed:
+        await sio.emit("voice_clarification", {
+            "prompt": cmd.clarification_prompt or "Could you clarify what you'd like to do?",
+            "transcript": transcript,
+        }, to=sid)
+        return
+
+    if cmd.action_type == "choose_option" and cmd.parameters.get("option_id") and cmd.target_id:
+        actor_name, chosen_label, report_title = _decide_report(
+            gs, player_id, cmd.target_id, cmd.parameters["option_id"]
+        )
+        gs.event_log.append(GameEvent(
+            event_id=str(uuid.uuid4()),
+            event_type=GameEventType.MAJOR_DECISION,
+            turn=gs.turn,
+            cycle=gs.cycle,
+            description=f"{actor_name} 🎙 voiced '{chosen_label}' on '{report_title}'",
+            player_id=player_id,
+        ))
+        await store.broadcast_game_state()
+
+    elif cmd.action_type == "defer" and cmd.target_id:
+        for report in gs.pending_reports.get(player_id, []):
+            if report.report_id == cmd.target_id and not report.urgent and report.defer_count < 2:
+                report.defer_count += 1
+                report.deferred_until_turn = gs.turn + 2
+                report.status = ReportStatus.DEFERRED
+                break
+        await store.broadcast_game_state()
+
+    elif cmd.action_type == "escalate" and cmd.target_id:
+        for report in gs.pending_reports.get(player_id, []):
+            if report.report_id == cmd.target_id:
+                report.escalated_to_council = True
+                report.status = ReportStatus.ESCALATED
+                break
+        await store.broadcast_game_state()
 
 
 @sio.event

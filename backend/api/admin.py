@@ -303,6 +303,50 @@ async def get_usage(token: str = Query(...)):
     }
 
 
+@router.get("/admin/reports")
+async def get_reports(token: str = Query(...), status: str = Query(default="all")):
+    """
+    Returns all reports grouped by player, with decision resolved to a human-readable label.
+    ?status=all | pending | decided | deferred | escalated
+    """
+    _require_admin(token)
+    if store.game_state is None:
+        raise HTTPException(status_code=503, detail="Game state not initialised")
+
+    gs = store.game_state
+    result = {}
+    for player_id, reports in gs.pending_reports.items():
+        player = gs.players.get(player_id)
+        player_name = player.councillor.name if player else player_id
+        filtered = reports if status == "all" else [r for r in reports if r.status == status]
+        result[player_id] = {
+            "player_name": player_name,
+            "reports": [
+                {
+                    "report_id": r.report_id,
+                    "title": r.title,
+                    "domain": r.domain,
+                    "status": r.status,
+                    "urgent": r.urgent,
+                    "turn_received": r.turn_received,
+                    "turn_deadline": r.turn_deadline,
+                    "defer_count": r.defer_count,
+                    "decision_option_id": r.decision,
+                    "decision_label": next(
+                        (o.label for o in r.options if o.option_id == r.decision), None
+                    ) if r.decision else None,
+                    "options": [
+                        {"option_id": o.option_id, "label": o.label, "risk_level": o.risk_level}
+                        for o in r.options
+                    ],
+                }
+                for r in filtered
+            ],
+        }
+
+    return result
+
+
 @router.get("/admin/dev-log")
 async def get_dev_log(token: str = Query(...), limit: int = Query(default=50)):
     _require_admin(token)
