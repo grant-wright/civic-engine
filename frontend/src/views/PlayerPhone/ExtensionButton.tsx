@@ -2,14 +2,14 @@ import { useGameContext } from '../../store'
 import socket from '../../socket'
 
 export default function ExtensionButton() {
-  const { gameState } = useGameContext()
+  const { gameState, playerIdentity } = useGameContext()
   const remaining = gameState?.council_extensions_remaining ?? 0
   const disabled = remaining === 0
 
   return (
     <button
       disabled={disabled}
-      onClick={() => socket.emit('council_extension')}
+      onClick={() => socket.emit('council_extension', { player_id: playerIdentity.player_id })}
       title="Add 30 seconds to the council turn"
       style={{
         padding: '0.35rem 0.7rem',

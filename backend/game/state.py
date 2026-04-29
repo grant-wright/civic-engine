@@ -2,6 +2,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, computed_field
 from enum import Enum
 from typing import Literal
+from game.rules import StartingBudget, Turn
 
 
 # ─── Enums ───────────────────────────────────────────────────────────────────
@@ -274,9 +275,9 @@ class CityMap(BaseModel):
 # ─── Metrics & Economy ────────────────────────────────────────────────────────
 
 class DepartmentBudget(BaseModel):
-    finance: int = 10_000
-    infrastructure: int = 5_000
-    transport: int = 5_000
+    finance: int = StartingBudget.finance
+    infrastructure: int = StartingBudget.infrastructure
+    transport: int = StartingBudget.transport
 
 
 class Metrics(BaseModel):
@@ -459,8 +460,8 @@ class GameState(BaseModel):
     pending_effects: list[tuple[int, Effect]] = []
     event_log: list[GameEvent] = []
 
-    council_extensions_remaining: int = 3
-    turn_time_limit: int = 40
+    council_extensions_remaining: int = Turn.extensions_per_game
+    turn_time_limit: int = Turn.default_seconds
     current_turn_extended: bool = False
 
     win_state: WinState | None = None

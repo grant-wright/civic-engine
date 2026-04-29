@@ -5,6 +5,7 @@ from game.state import (
     Player, PlayerType, AIDifficulty, Agent, Metrics, RailwayParty, CanalParty,
     Report, ReportOption, ReportType, ReportStatus, RiskLevel,
 )
+from game.rules import FactionSensitivity
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -301,7 +302,7 @@ def _make_factions() -> list[Faction]:
             population_weight=1.2,
             transport_priorities=["canal_freight", "canal_employment"],
             political_sensitivities=["worker_safety", "canal_progress", "workers_rights"],
-            reaction_threshold=8.0,
+            reaction_threshold=FactionSensitivity.canal_workers,
             canal_alignment=0.9,
             railway_alignment=-0.7,
         ),
@@ -319,7 +320,7 @@ def _make_factions() -> list[Faction]:
             population_weight=0.9,
             transport_priorities=["road_freight", "turnpike_revenue"],
             political_sensitivities=["canal_progress", "freight_road", "fiscal_prudence"],
-            reaction_threshold=12.0,
+            reaction_threshold=FactionSensitivity.carters,
             canal_alignment=-0.6,
             railway_alignment=-0.3,
         ),
@@ -337,7 +338,7 @@ def _make_factions() -> list[Faction]:
             population_weight=0.7,
             transport_priorities=["canal_amenity", "water_quality"],
             political_sensitivities=["heritage", "aesthetic_index", "horse_pollution"],
-            reaction_threshold=10.0,
+            reaction_threshold=FactionSensitivity.anglers,
             canal_alignment=0.7,
             railway_alignment=-0.4,
         ),
@@ -355,7 +356,7 @@ def _make_factions() -> list[Faction]:
             population_weight=1.1,
             transport_priorities=["freight_cost", "canal_freight", "road_freight"],
             political_sensitivities=["canal_progress", "economic_equity", "election_polling"],
-            reaction_threshold=10.0,
+            reaction_threshold=FactionSensitivity.merchants,
             canal_alignment=0.5,
             railway_alignment=0.1,
         ),
@@ -584,3 +585,40 @@ def scenario_fresh_game() -> GameState:
         canal_party=CanalParty(),
         pending_reports=pending_reports,
     )
+
+
+# ─── scenario_election_pressure ───────────────────────────────────────────────
+
+def scenario_election_pressure() -> GameState:
+    """
+    Turn 18 of cycle 1 — two turns from the election with polling dangerously close
+    to the loss threshold.  Used to test the engine's election and construction paths
+    without playing through 17 turns.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 18
+
+    # Polling close to loss threshold; happiness already below polling → polling falls next tick
+    gs.metrics.election_polling = 45.0
+    gs.metrics.citizen_happiness = 42.0
+
+    # Canal efficiency below HorsePollution.low_efficiency_threshold (30) → pollution rising
+    gs.metrics.canal_efficiency_index = 18.0
+    gs.metrics.horse_pollution = 55.0
+
+    # seg_02 waypoint 1 mid-construction: turns_spent=3, required=4 → completes on next advance_construction
+    seg_02 = gs.city_map.canal_segments["seg_02"]
+    wp = seg_02.waypoints[0]
+    wp.status = WaypointStatus.UNDER_CONSTRUCTION
+    wp.turns_spent = 3
+
+    return gs
+
+
+# ─── Scenario registry ────────────────────────────────────────────────────────
+
+SCENARIOS = {
+    "fresh_game": scenario_fresh_game,
+    "election_pressure": scenario_election_pressure,
+}

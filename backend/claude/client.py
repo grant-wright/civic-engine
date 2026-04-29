@@ -1,6 +1,18 @@
 from anthropic import AsyncAnthropic
 from dataclasses import dataclass
 
+
+class TokenCost:
+    """
+    Anthropic API pricing in USD per token.
+    Source: https://www.anthropic.com/pricing — update if pricing changes.
+    """
+    input = 0.000003
+    output = 0.000015
+    cache_write = 0.00000375
+    cache_read = 0.0000003
+
+
 client = AsyncAnthropic()  # reads ANTHROPIC_API_KEY from env automatically
 MODEL = "claude-sonnet-4-6"
 
@@ -18,10 +30,10 @@ class UsageRecord:
     @property
     def cost_usd(self) -> float:
         return (
-            self.input_tokens * 0.000003
-            + self.output_tokens * 0.000015
-            + self.cache_write_tokens * 0.00000375
-            + self.cache_read_tokens * 0.0000003
+            self.input_tokens         * TokenCost.input
+            + self.output_tokens      * TokenCost.output
+            + self.cache_write_tokens * TokenCost.cache_write
+            + self.cache_read_tokens  * TokenCost.cache_read
         )
 
 

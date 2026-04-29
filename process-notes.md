@@ -213,6 +213,37 @@ Deeper specification caught: railway party had no defined behavior on the map (m
 
 ---
 
+### Step 9 — Turn loop + effects engine
+
+**File split rationale.**
+Turn logic split across `factions.py`, `map.py`, `elections.py`, and `engine.py` — one concern per file. `engine.py` is the top-level orchestrator and the only public entry point. Each sub-module is independently testable, and the separation mirrors the spec's domain sections exactly.
+
+**Circular import resolution.**
+`elections.py` uses lazy imports (inside function bodies) for `map.check_canal_connectivity` to break the `elections → map → state → elections` cycle. All other cross-module imports are top-level.
+
+**Metric update order.**
+Inside `advance_turn`: effects → construction → `update_metrics` → `check_cycle_end`. `update_metrics` runs *before* `check_cycle_end`, so the election check always uses freshly recomputed polling — not a stale value from the previous turn.
+
+**Road rage formula (step c).**
+`target = road_freight_pct × RoadRage.freight_weight + horse_pollution × RoadRage.pollution_weight`, nudged at most `RoadRage.max_step_per_turn` per turn. Weights (0.6 / 0.4) and cap (5.0) are in `rules.RoadRage`. Design decision approved during step 9 review.
+
+**Construction auto-chaining.**
+When a waypoint's `turns_spent >= construction_turns_required`, it's marked COMPLETE and the next UNSTARTED waypoint in the same segment is automatically set to UNDER_CONSTRUCTION. Players don't need to manually trigger each waypoint.
+
+**`set-field` endpoint design.**
+Accepts dot-notation paths (`metrics.election_polling`). Type is inferred from the existing attribute value — float → `float(value)`, int → `int(value)`, else string. One level of nesting only, sufficient for current state shape.
+
+**`election_pressure` scenario note.**
+Seeds `citizen_happiness=42` and `canal_efficiency_index=18`, but `update_metrics` recomputes both immediately. Happiness lands ~55 (faction weighted avg) and efficiency lands at 0 (no complete canal segment connecting all major nodes). Polling therefore nudges *up*, not down. Correct engine behaviour — the scenario needs per-faction `happiness` overrides to create realistic pressure. Addressed in step 12 scenarios.
+
+**Game-over inertia.**
+`loss_threshold` is 40. `update_metrics` runs first each turn, so polling moves `+= polling_lag × (happiness − polling)` before the check. To trigger game_over on turn 20, polling must be set to ≤36 so the inertia step still lands below 40 at typical happiness values (~55).
+
+**Known issue: railway activation timing.**
+The spec defines different activation *cycle/turn* per game length (Beginner: Cycle 3 T1, Standard: Cycle 2 T10, Experienced: Cycle 2 T1). Currently only the influence threshold is checked. Documented in `rules.Railway` with a recommended fix for /iterate.
+
+---
+
 ## /checklist
 
 **Build mode:** Step-by-step. Grant chose this deliberately — he's here to learn the stack and the agent workflow, not just ship. Comprehension checks: yes, with notes flagged for post-delivery follow-up. Verification: yes, per-item. Check-in cadence: learning-driven.

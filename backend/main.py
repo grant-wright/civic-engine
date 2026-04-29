@@ -5,7 +5,8 @@ import socketio
 from fastapi import FastAPI
 import game.store as store
 from game.scenarios import scenario_fresh_game
-from game.state import GameEvent, GameEventType, GameStatus
+from game.state import GameEvent, GameEventType, GameStatus, ReportStatus
+from game.rules import Turn, Election
 from api.admin import router as admin_router
 from api.health import router as health_router
 
@@ -85,24 +86,39 @@ async def register(sid: str, data: dict):
 async def player_action(sid: str, data: dict):
     """
     Payload: {player_id, action_type, target_type, target_id, option_id}
-    Logs the action as a game event and broadcasts. Full effect application in step 9.
+    Schedules the chosen option's effects and marks the report decided.
     """
     if store.game_state is None:
         return
 
+    gs = store.game_state
+    player_id = data.get("player_id", "")
+    target_id = data.get("target_id", "")
+    option_id = data.get("option_id", "")
+
+    # Apply chosen option's effects; graceful no-op if report/option not found
+    for report in gs.pending_reports.get(player_id, []):
+        if report.report_id == target_id:
+            for opt in report.options:
+                if opt.option_id == option_id:
+                    for e in opt.effects:
+                        gs.pending_effects.append((gs.turn + e.delay_turns, e))
+                    report.status = ReportStatus.DECIDED
+                    report.decision = option_id
+            break
+
     event = GameEvent(
         event_id=str(uuid.uuid4()),
         event_type=GameEventType.MAJOR_DECISION,
-        turn=store.game_state.turn,
-        cycle=store.game_state.cycle,
+        turn=gs.turn,
+        cycle=gs.cycle,
         description=(
-            f"{data.get('player_id', 'unknown')} chose "
-            f"{data.get('option_id', '?')} on {data.get('target_id', '?')}"
+            f"{player_id or 'unknown'} chose {option_id or '?'} on {target_id or '?'}"
         ),
-        player_id=data.get("player_id"),
+        player_id=player_id,
         data=data,
     )
-    store.game_state.event_log.append(event)
+    gs.event_log.append(event)
 
     await store.broadcast_game_state()
 
@@ -111,6 +127,22 @@ async def player_action(sid: str, data: dict):
 async def voice_command(sid: str, data: dict):
     """Stub — logs and ignores. Full implementation in step 11."""
     pass
+
+
+@sio.event
+async def end_turn(sid: str, data: dict | None = None):
+    """
+    Payload: {player_id}  — sent by the frontend when the turn timer fires.
+    Advances the engine: applies pending effects, ticks construction, updates metrics,
+    checks cycle end, then increments turn.
+    """
+    if store.game_state is None:
+        return
+
+    from game.engine import advance_turn
+
+    advance_turn(store.game_state)
+    await store.broadcast_game_state()
 
 
 @sio.event
@@ -127,8 +159,8 @@ async def council_extension(sid: str, data: dict | None = None):
         return
 
     gs.council_extensions_remaining -= 1
-    gs.turn_time_limit += 30
-    gs.metrics.election_polling = max(0.0, gs.metrics.election_polling - 2.0)
+    gs.turn_time_limit += Turn.extension_seconds
+    gs.metrics.election_polling = max(0.0, gs.metrics.election_polling - Election.extension_polling_cost)
     gs.current_turn_extended = True
 
     payload = data or {}
@@ -145,6 +177,48 @@ async def council_extension(sid: str, data: dict | None = None):
         data={"remaining": gs.council_extensions_remaining},
     )
     gs.event_log.append(event)
+
+    await store.broadcast_game_state()
+
+
+@sio.event
+async def vote_cast(sid: str, data: dict):
+    """
+    Payload: {player_id, vote_id, option_id}
+    Records the player's vote. Resolves and applies effects when all players have voted.
+    """
+    if store.game_state is None:
+        return
+
+    gs = store.game_state
+    vote = gs.pending_vote
+    if vote is None or vote.vote_id != data.get("vote_id"):
+        return
+
+    player_id = data.get("player_id", "")
+    option_id = data.get("option_id", "")
+    if player_id and option_id:
+        vote.votes[player_id] = option_id
+
+    # Resolve once all players have submitted
+    if len(vote.votes) >= len(gs.players):
+        counts: dict[str, int] = {}
+        for oid in vote.votes.values():
+            counts[oid] = counts.get(oid, 0) + 1
+        winning_id = max(counts, key=lambda k: counts[k])
+
+        top = counts[winning_id]
+        vote.mayor_tiebreaker = sum(1 for v in counts.values() if v == top) > 1
+
+        for opt in vote.options:
+            if opt.option_id == winning_id:
+                for e in opt.effects:
+                    gs.pending_effects.append((gs.turn + e.delay_turns, e))
+                break
+
+        vote.status = "resolved"
+        vote.result = winning_id
+        gs.pending_vote = None
 
     await store.broadcast_game_state()
 
