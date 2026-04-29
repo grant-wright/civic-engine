@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -5,7 +6,7 @@ import socketio
 from fastapi import FastAPI
 import game.store as store
 from game.scenarios import scenario_fresh_game
-from game.state import GameEvent, GameEventType, GameStatus, ReportStatus
+from game.state import GameEvent, GameEventType, GameStatus, PlayerType, ReportStatus
 from game.rules import Turn, Election
 from api.admin import router as admin_router
 from api.health import router as health_router
@@ -39,6 +40,24 @@ if _default_map_path.exists():
         _match = next((c for c in _city_map.councillors if c.role == _player.role), None)
         if _match:
             _player.councillor = _match
+
+
+# ─── Turn content helper ──────────────────────────────────────────────────────
+
+async def _start_new_turn(gs) -> None:
+    """Generate Claude reports for the new turn and queue AI player decisions."""
+    if gs.status != GameStatus.IN_GAME:
+        return
+    from game.reports import schedule_reports
+    await schedule_reports(gs)
+    await store.broadcast_game_state()
+    from claude.ai_player import make_ai_decision
+    for player in gs.players.values():
+        if player.player_type != PlayerType.AI:
+            continue
+        for report in gs.pending_reports.get(player.player_id, []):
+            if report.status == ReportStatus.PENDING:
+                store.fire_task(make_ai_decision(player, report, gs, store.broadcast_game_state))
 
 
 # ─── Socket.IO event handlers ─────────────────────────────────────────────────
@@ -97,24 +116,29 @@ async def player_action(sid: str, data: dict):
     option_id = data.get("option_id", "")
 
     # Apply chosen option's effects; graceful no-op if report/option not found
+    chosen_label = option_id  # fallback to raw id if not resolved
+    report_title = target_id
     for report in gs.pending_reports.get(player_id, []):
         if report.report_id == target_id:
+            report_title = report.title
             for opt in report.options:
                 if opt.option_id == option_id:
+                    chosen_label = opt.label
                     for e in opt.effects:
                         gs.pending_effects.append((gs.turn + e.delay_turns, e))
                     report.status = ReportStatus.DECIDED
                     report.decision = option_id
             break
 
+    player = gs.players.get(player_id)
+    actor_name = player.councillor.name if player else (player_id or "unknown")
+
     event = GameEvent(
         event_id=str(uuid.uuid4()),
         event_type=GameEventType.MAJOR_DECISION,
         turn=gs.turn,
         cycle=gs.cycle,
-        description=(
-            f"{player_id or 'unknown'} chose {option_id or '?'} on {target_id or '?'}"
-        ),
+        description=f"{actor_name} chose '{chosen_label}' on '{report_title}'",
         player_id=player_id,
         data=data,
     )
@@ -143,6 +167,7 @@ async def end_turn(sid: str, data: dict | None = None):
 
     advance_turn(store.game_state)
     await store.broadcast_game_state()
+    store.fire_task(_start_new_turn(store.game_state))
 
 
 @sio.event
@@ -251,6 +276,7 @@ async def new_game(sid: str, data: dict):
     store.game_state = gs
 
     await store.broadcast_game_state()
+    store.fire_task(_start_new_turn(gs))
 
 
 @sio.event

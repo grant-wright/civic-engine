@@ -67,7 +67,7 @@ export default function MetricsDash() {
         </>
       )}
 
-      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+      <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
         <div style={{ flex: 1, background: '#2e303a', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
           <div style={{ color: '#6b7280', fontSize: 9, textTransform: 'uppercase' }}>Polling</div>
           <div style={{ color: m.election_polling < 50 ? '#ef4444' : '#22c55e', fontWeight: 700, fontSize: 13 }}>
@@ -77,6 +77,10 @@ export default function MetricsDash() {
         <div style={{ flex: 1, background: '#2e303a', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
           <div style={{ color: '#6b7280', fontSize: 9, textTransform: 'uppercase' }}>Economy</div>
           <div style={{ color: '#d1d5db', fontWeight: 700, fontSize: 13 }}>{Math.round(m.economy_index)}</div>
+        </div>
+        <div style={{ flex: 1, background: '#2e303a', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
+          <div style={{ color: '#6b7280', fontSize: 9, textTransform: 'uppercase' }}>Turn</div>
+          <div style={{ color: '#d1d5db', fontWeight: 700, fontSize: 13 }}>{gameState.turn}/20</div>
         </div>
         <div style={{ flex: 1, background: '#2e303a', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
           <div style={{ color: '#6b7280', fontSize: 9, textTransform: 'uppercase' }}>Cycle</div>

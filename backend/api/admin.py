@@ -1,8 +1,9 @@
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from config import settings
-from game.state import GameState, CityMap
+from game.state import GameState, CityMap, GameStatus, PlayerType, ReportStatus
 import game.store as store
 
 _SAVES_DIR = Path(__file__).parent.parent / "saves"
@@ -114,12 +115,67 @@ async def seed_scenario(token: str = Query(...), scenario: str = Query(default="
     store.game_state = gs
     await store.broadcast_game_state()
 
+    if gs.status == GameStatus.IN_GAME:
+        from game.reports import schedule_reports
+        from claude.ai_player import make_ai_decision
+
+        async def _seed_turn_content():
+            await schedule_reports(gs)
+            await store.broadcast_game_state()
+            for player in gs.players.values():
+                if player.player_type != PlayerType.AI:
+                    continue
+                for report in gs.pending_reports.get(player.player_id, []):
+                    if report.status == ReportStatus.PENDING:
+                        store.fire_task(
+                            make_ai_decision(player, report, gs, store.broadcast_game_state)
+                        )
+
+        store.fire_task(_seed_turn_content())
+
     return {
         "scenario": scenario,
         "turn": gs.turn,
         "cycle": gs.cycle,
         "status": gs.status,
     }
+
+
+@router.post("/admin/start-game")
+async def start_game(token: str = Query(...)):
+    """
+    Transition the current game state to IN_GAME and generate the first turn's reports.
+    Use after /admin/seed-scenario (which seeds LOBBY) to actually begin play.
+    """
+    _require_admin(token)
+    if store.game_state is None:
+        raise HTTPException(status_code=503, detail="Game state not initialised")
+
+    gs = store.game_state
+    if gs.status == GameStatus.IN_GAME:
+        raise HTTPException(status_code=400, detail="Game is already IN_GAME")
+
+    gs.status = GameStatus.IN_GAME
+    await store.broadcast_game_state()
+
+    from game.reports import schedule_reports
+    from claude.ai_player import make_ai_decision
+
+    async def _start():
+        await schedule_reports(gs)
+        await store.broadcast_game_state()
+        for player in gs.players.values():
+            if player.player_type != PlayerType.AI:
+                continue
+            for report in gs.pending_reports.get(player.player_id, []):
+                if report.status == ReportStatus.PENDING:
+                    store.fire_task(
+                        make_ai_decision(player, report, gs, store.broadcast_game_state)
+                    )
+
+    store.fire_task(_start())
+
+    return {"status": gs.status, "turn": gs.turn, "cycle": gs.cycle}
 
 
 @router.post("/admin/set-field")
@@ -172,10 +228,24 @@ async def advance_turn_endpoint(token: str = Query(...)):
         raise HTTPException(status_code=503, detail="Game state not initialised")
 
     from game.engine import advance_turn
+    from game.reports import schedule_reports
+    from claude.ai_player import make_ai_decision
 
     gs = store.game_state
     advance_turn(gs)
     await store.broadcast_game_state()
+
+    if gs.status == GameStatus.IN_GAME:
+        await schedule_reports(gs)
+        await store.broadcast_game_state()
+        for player in gs.players.values():
+            if player.player_type != PlayerType.AI:
+                continue
+            for report in gs.pending_reports.get(player.player_id, []):
+                if report.status == ReportStatus.PENDING:
+                    store.fire_task(
+                        make_ai_decision(player, report, gs, store.broadcast_game_state)
+                    )
 
     return {
         "turn": gs.turn,
@@ -225,3 +295,22 @@ async def get_usage(token: str = Query(...)):
             for r in usage_log
         ],
     }
+
+
+@router.get("/admin/dev-log")
+async def get_dev_log(token: str = Query(...), limit: int = Query(default=50)):
+    _require_admin(token)
+    entries = store.dev_log[-limit:] if limit else store.dev_log
+    return {
+        "total": len(store.dev_log),
+        "returned": len(entries),
+        "entries": entries,
+    }
+
+
+@router.delete("/admin/dev-log")
+async def clear_dev_log(token: str = Query(...)):
+    _require_admin(token)
+    count = len(store.dev_log)
+    store.dev_log.clear()
+    return {"cleared": count}

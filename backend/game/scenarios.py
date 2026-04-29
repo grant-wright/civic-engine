@@ -365,7 +365,10 @@ def _make_factions() -> list[Faction]:
 
 # ─── scenario_fresh_game ──────────────────────────────────────────────────────
 
-def scenario_fresh_game() -> GameState:
+def scenario_fresh_game(include_seeded_report: bool = False) -> GameState:
+    # FLAG FOR /ITERATE: expand scenario test suite — add canal_progress, railway_activation,
+    # canal_mania, heritage, crisis scenarios (step 12 checklist). Each should seed realistic
+    # metric values and optional pre-built reports so Claude generation is skippable in CI.
     councillors = _make_councillors()
     factions = _make_factions()
 
@@ -529,47 +532,47 @@ def scenario_fresh_game() -> GameState:
         ),
     }
 
-    seeded_report = Report(
-        report_id="r_seed_01",
-        title="Market Embankment Survey Request",
-        description=(
-            "Contractors have submitted preliminary estimates for the Market Embankment section "
-            "of the Millbrook–Coppergate canal. Before construction can begin, the council must decide "
-            "how thoroughly to survey the ground. A collapsed embankment set the last commission back "
-            "by two years. How shall we proceed?"
-        ),
-        report_type=ReportType.SCHEDULED,
-        addressed_to="p_transport",
-        domain=CouncilRole.TRANSPORT,
-        options=[
-            ReportOption(
-                option_id="opt_01_standard",
-                label="Approve Standard Survey",
-                description="Commission the contractor's standard ground survey. Reliable and fast.",
-                effects=[],
-                risk_level=RiskLevel.LOW,
+    pending_reports: dict = {}
+    if include_seeded_report:
+        pending_reports["p_transport"] = [Report(
+            report_id="r_seed_01",
+            title="Market Embankment Survey Request",
+            description=(
+                "Contractors have submitted preliminary estimates for the Market Embankment section "
+                "of the Millbrook–Coppergate canal. Before construction can begin, the council must decide "
+                "how thoroughly to survey the ground. A collapsed embankment set the last commission back "
+                "by two years. How shall we proceed?"
             ),
-            ReportOption(
-                option_id="opt_01_enhanced",
-                label="Commission Enhanced Survey",
-                description="A more thorough survey including subsurface drainage assessment. Costs more time but reduces construction risk.",
-                effects=[],
-                risk_level=RiskLevel.MEDIUM,
-            ),
-            ReportOption(
-                option_id="opt_01_skip",
-                label="Proceed Without Survey",
-                description="Skip the survey entirely to save two turns. High risk of embankment failure mid-construction.",
-                effects=[],
-                risk_level=RiskLevel.HIGH,
-            ),
-        ],
-        status=ReportStatus.PENDING,
-        turn_received=1,
-        turn_deadline=3,
-    )
-
-    pending_reports = {"p_transport": [seeded_report]}
+            report_type=ReportType.SCHEDULED,
+            addressed_to="p_transport",
+            domain=CouncilRole.TRANSPORT,
+            options=[
+                ReportOption(
+                    option_id="opt_01_standard",
+                    label="Approve Standard Survey",
+                    description="Commission the contractor's standard ground survey. Reliable and fast.",
+                    effects=[],
+                    risk_level=RiskLevel.LOW,
+                ),
+                ReportOption(
+                    option_id="opt_01_enhanced",
+                    label="Commission Enhanced Survey",
+                    description="A more thorough survey including subsurface drainage assessment. Costs more time but reduces construction risk.",
+                    effects=[],
+                    risk_level=RiskLevel.MEDIUM,
+                ),
+                ReportOption(
+                    option_id="opt_01_skip",
+                    label="Proceed Without Survey",
+                    description="Skip the survey entirely to save two turns. High risk of embankment failure mid-construction.",
+                    effects=[],
+                    risk_level=RiskLevel.HIGH,
+                ),
+            ],
+            status=ReportStatus.PENDING,
+            turn_received=1,
+            turn_deadline=3,
+        )]
 
     return GameState(
         session_id=str(uuid.uuid4()),
@@ -618,7 +621,13 @@ def scenario_election_pressure() -> GameState:
 
 # ─── Scenario registry ────────────────────────────────────────────────────────
 
+def scenario_fresh_game_seeded() -> GameState:
+    """fresh_game with the hardcoded Market Embankment report pre-loaded — useful for UI testing."""
+    return scenario_fresh_game(include_seeded_report=True)
+
+
 SCENARIOS = {
-    "fresh_game": scenario_fresh_game,
+    "fresh_game":        scenario_fresh_game,
+    "fresh_game_seeded": scenario_fresh_game_seeded,
     "election_pressure": scenario_election_pressure,
 }

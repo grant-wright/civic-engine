@@ -1,5 +1,6 @@
 import uuid
 
+import game.store as store
 from game.state import (
     GameState, Effect, EffectType, GameEvent, GameEventType,
     SegmentStatus, WaypointStatus, CanalTier, RailwayPhase,
@@ -31,8 +32,19 @@ def _apply_single_effect(gs: GameState, effect: Effect) -> None:
             current = getattr(m.budget, effect.target_id, 0)
             setattr(m.budget, effect.target_id, current + int(effect.value))
         case EffectType.FACTION_MOOD:
-            f = gs.get_faction(effect.target_id)
-            f.happiness = max(0.0, min(100.0, f.happiness + float(effect.value)))
+            try:
+                f = gs.get_faction(effect.target_id)
+                f.happiness = max(0.0, min(100.0, f.happiness + float(effect.value)))
+            except KeyError:
+                valid = [f.faction_id for f in gs.factions]
+                store.log_dev(
+                    "effect_error",
+                    f"Unknown faction_id '{effect.target_id}' in FACTION_MOOD effect — skipped",
+                    turn=gs.turn,
+                    cycle=gs.cycle,
+                    valid_faction_ids=valid,
+                    effect_description=effect.description,
+                )
         case EffectType.RAILWAY_INFLUENCE:
             gs.railway_party.influence = max(
                 0.0, min(100.0, gs.railway_party.influence + float(effect.value))

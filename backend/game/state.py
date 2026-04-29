@@ -468,13 +468,18 @@ class GameState(BaseModel):
 
     def to_context_summary(self) -> str:
         m = self.metrics
+        faction_lines = ", ".join(
+            f"{f.name} (id={f.faction_id}, happiness={f.happiness:.0f})"
+            for f in self.factions
+        )
         return (
-            f"Turn {self.turn}, Cycle {self.cycle}. "
+            f"Turn {self.turn}/20, Cycle {self.cycle}/{self.game_length}. "
             f"Road Rage: {m.road_rage_index:.0f}, Canal Efficiency: {m.canal_efficiency_index:.0f}, "
             f"Aesthetic: {m.aesthetic_index:.0f}. "
             f"Citizen Happiness: {m.citizen_happiness:.0f}, Election Polling: {m.election_polling:.0f}. "
             f"Canal freight: {m.canal_freight_pct:.0f}%, Railway influence: {self.railway_party.influence:.0f}. "
-            f"Canal party influence: {self.canal_party.influence:.0f}."
+            f"Canal party influence: {self.canal_party.influence:.0f}. "
+            f"Factions: {faction_lines}."
         )
 
     def get_faction(self, faction_id: str) -> Faction:
