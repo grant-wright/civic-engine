@@ -8,6 +8,8 @@ venv/
 
 # Environment variables — NEVER commit these
 backend/.env
+frontend/.env
+frontend/.env.local
 
 # Game save files
 backend/saves/

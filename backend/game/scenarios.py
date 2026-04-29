@@ -3,6 +3,7 @@ from game.state import (
     GameState, GameStatus, CityMap, MapNode, NodeType, CanalSegment, Waypoint,
     WaypointType, WaypointStatus, Faction, Councillor, CouncillorSkill, CouncilRole,
     Player, PlayerType, AIDifficulty, Agent, Metrics, RailwayParty, CanalParty,
+    CanalMania, RailwayPhase,
     Report, ReportOption, ReportType, ReportStatus, RiskLevel,
 )
 from game.rules import FactionSensitivity
@@ -366,9 +367,6 @@ def _make_factions() -> list[Faction]:
 # ─── scenario_fresh_game ──────────────────────────────────────────────────────
 
 def scenario_fresh_game(include_seeded_report: bool = False) -> GameState:
-    # FLAG FOR /ITERATE: expand scenario test suite — add canal_progress, railway_activation,
-    # canal_mania, heritage, crisis scenarios (step 12 checklist). Each should seed realistic
-    # metric values and optional pre-built reports so Claude generation is skippable in CI.
     councillors = _make_councillors()
     factions = _make_factions()
 
@@ -619,6 +617,144 @@ def scenario_election_pressure() -> GameState:
     return gs
 
 
+# ─── scenario_canal_progress ──────────────────────────────────────────────────
+
+def scenario_canal_progress() -> GameState:
+    """
+    Turn 15 — active construction underway, canal freight beginning to shift from road.
+    Railway influence growing but not yet activated; seg_02 embankment mid-dig.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 15
+
+    seg_02 = gs.city_map.canal_segments["seg_02"]
+    wp = seg_02.waypoints[0]  # Market Embankment
+    wp.status = WaypointStatus.UNDER_CONSTRUCTION
+    wp.turns_spent = 2
+
+    gs.metrics.canal_freight_pct = 15.0
+    gs.metrics.road_freight_pct = 85.0
+    gs.metrics.canal_efficiency_index = 16.0
+    gs.metrics.horse_pollution = 35.0
+    gs.metrics.road_rage_index = 60.0
+    gs.metrics.citizen_happiness = 62.0
+    gs.metrics.election_polling = 60.0
+    gs.railway_party.influence = 30.0
+    return gs
+
+
+# ─── scenario_railway_activation ──────────────────────────────────────────────
+
+def scenario_railway_activation() -> GameState:
+    """
+    Turn 10 — railway influence at 35, ~2 turns from crossing the 40 activation threshold.
+    Canal construction barely started; road freight dominant.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 10
+
+    gs.metrics.canal_freight_pct = 5.0
+    gs.metrics.road_freight_pct = 95.0
+    gs.metrics.canal_efficiency_index = 10.0
+    gs.metrics.horse_pollution = 42.0
+    gs.metrics.road_rage_index = 62.0
+    gs.metrics.citizen_happiness = 55.0
+    gs.metrics.election_polling = 55.0
+    gs.railway_party.influence = 35.0
+    return gs
+
+
+# ─── scenario_canal_mania ─────────────────────────────────────────────────────
+
+def scenario_canal_mania() -> GameState:
+    """
+    Turn 8, Cycle 2 — canal mania triggered, freight heavily shifted to canal,
+    bubble risk building. Both segments complete; windfall income received.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 8
+    gs.cycle = 2
+
+    for seg in gs.city_map.canal_segments.values():
+        for wp in seg.waypoints:
+            wp.status = WaypointStatus.COMPLETE
+            wp.turns_spent = wp.construction_turns_required
+
+    gs.metrics.canal_freight_pct = 65.0
+    gs.metrics.road_freight_pct = 35.0
+    gs.metrics.canal_efficiency_index = 68.0
+    gs.metrics.horse_pollution = 20.0
+    gs.metrics.road_rage_index = 30.0
+    gs.metrics.aesthetic_index = 55.0
+    gs.metrics.citizen_happiness = 72.0
+    gs.metrics.election_polling = 72.0
+    gs.canal_party.influence = 82.0
+    gs.canal_mania = CanalMania(triggered=True, windfall_received=2_000, bubble_risk=30.0)
+    return gs
+
+
+# ─── scenario_heritage ────────────────────────────────────────────────────────
+
+def scenario_heritage() -> GameState:
+    """
+    Turn 12 — aesthetic index 75, heritage commendation path open (threshold=70).
+    A canal-side amenity mooring is complete; factions broadly satisfied.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 12
+
+    seg_02 = gs.city_map.canal_segments["seg_02"]
+    seg_02.waypoints.append(Waypoint(
+        waypoint_id="wp_02_amenity",
+        name="Canal Gardens Mooring",
+        waypoint_type=WaypointType.AMENITY,
+        position=(0.38, 0.48),
+        status=WaypointStatus.COMPLETE,
+        construction_turns_required=2,
+        turns_spent=2,
+    ))
+
+    gs.metrics.aesthetic_index = 75.0
+    gs.metrics.canal_freight_pct = 12.0
+    gs.metrics.road_freight_pct = 88.0
+    gs.metrics.canal_efficiency_index = 14.0
+    gs.metrics.horse_pollution = 28.0
+    gs.metrics.road_rage_index = 58.0
+    gs.metrics.citizen_happiness = 68.0
+    gs.metrics.election_polling = 65.0
+    gs.railway_party.influence = 25.0
+    return gs
+
+
+# ─── scenario_crisis ──────────────────────────────────────────────────────────
+
+def scenario_crisis() -> GameState:
+    """
+    Turn 16 — everything going wrong: polling near loss threshold, railway already
+    activated at influence 55, horse pollution crisis, economy index collapsed.
+    """
+    gs = scenario_fresh_game()
+    gs.status = GameStatus.IN_GAME
+    gs.turn = 16
+
+    gs.metrics.election_polling = 42.0
+    gs.metrics.citizen_happiness = 40.0
+    gs.metrics.horse_pollution = 75.0
+    gs.metrics.road_rage_index = 72.0
+    gs.metrics.canal_efficiency_index = 8.0
+    gs.metrics.canal_freight_pct = 3.0
+    gs.metrics.road_freight_pct = 97.0
+    gs.metrics.aesthetic_index = 30.0
+    gs.metrics.economy_index = 28.0
+    gs.railway_party.influence = 55.0
+    gs.railway_party.phase = RailwayPhase.ACTIVE
+    return gs
+
+
 # ─── Scenario registry ────────────────────────────────────────────────────────
 
 def scenario_fresh_game_seeded() -> GameState:
@@ -627,7 +763,12 @@ def scenario_fresh_game_seeded() -> GameState:
 
 
 SCENARIOS = {
-    "fresh_game":        scenario_fresh_game,
-    "fresh_game_seeded": scenario_fresh_game_seeded,
-    "election_pressure": scenario_election_pressure,
+    "fresh_game":           scenario_fresh_game,
+    "fresh_game_seeded":    scenario_fresh_game_seeded,
+    "canal_progress":       scenario_canal_progress,
+    "railway_activation":   scenario_railway_activation,
+    "canal_mania":          scenario_canal_mania,
+    "heritage":             scenario_heritage,
+    "election_pressure":    scenario_election_pressure,
+    "crisis":               scenario_crisis,
 }

@@ -100,6 +100,37 @@ async def load_map(token: str = Query(...), slot: str = Query(default="default")
     return city_map
 
 
+@router.post("/admin/save-state")
+async def save_state(token: str = Query(...), slot: str = Query(default="default")):
+    _require_admin(token)
+    if store.game_state is None:
+        raise HTTPException(status_code=503, detail="Game state not initialised")
+
+    _SAVES_DIR.mkdir(exist_ok=True)
+    save_path = _SAVES_DIR / f"state_{slot}.json"
+    save_path.write_text(store.game_state.model_dump_json())
+
+    return {
+        "saved": str(save_path),
+        "slot": slot,
+        "turn": store.game_state.turn,
+        "cycle": store.game_state.cycle,
+    }
+
+
+@router.post("/admin/load-state", response_model=GameState)
+async def load_state(token: str = Query(...), slot: str = Query(default="default")):
+    _require_admin(token)
+    save_path = _SAVES_DIR / f"state_{slot}.json"
+    if not save_path.exists():
+        raise HTTPException(status_code=404, detail=f"No saved state in slot '{slot}'")
+
+    gs = GameState.model_validate_json(save_path.read_text())
+    store.game_state = gs
+    await store.broadcast_game_state()
+    return gs
+
+
 @router.post("/admin/seed-scenario")
 async def seed_scenario(token: str = Query(...), scenario: str = Query(default="fresh_game")):
     _require_admin(token)
@@ -222,7 +253,7 @@ async def set_field(
 
 
 @router.post("/admin/advance-turn")
-async def advance_turn_endpoint(token: str = Query(...)):
+async def advance_turn_endpoint(token: str = Query(...), count: int = Query(default=1)):
     _require_admin(token)
     if store.game_state is None:
         raise HTTPException(status_code=503, detail="Game state not initialised")
@@ -233,9 +264,16 @@ async def advance_turn_endpoint(token: str = Query(...)):
     from claude.ai_player import make_ai_decision
 
     gs = store.game_state
-    log_len_before = len(gs.event_log)
-    advance_turn(gs)
-    recent_events = gs.event_log[log_len_before:]
+    count = max(1, min(count, 20))
+
+    recent_events: list = []
+    for _ in range(count):
+        log_len_before = len(gs.event_log)
+        advance_turn(gs)
+        recent_events = gs.event_log[log_len_before:]
+        if gs.status != GameStatus.IN_GAME:
+            break
+
     await store.broadcast_game_state()
 
     turn_summary = build_turn_summary(gs, recent_events)

@@ -3,6 +3,7 @@ import MetricsDash from './MetricsDash'
 import InfluenceMeter from './InfluenceMeter'
 import EventFeed from './EventFeed'
 import VotePanel from './VotePanel'
+import DevPanel from '../../components/DevPanel'
 
 export default function CentralScreen() {
   return (
@@ -31,6 +32,7 @@ export default function CentralScreen() {
         <MetricsDash />
         <EventFeed />
       </div>
+      <DevPanel />
     </div>
   )
 }
