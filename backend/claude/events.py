@@ -3,6 +3,7 @@ claude/events.py — Report generation via Claude tool use.
 System and domain context are prompt-cached; only the per-turn trigger changes.
 """
 import uuid
+import game.store as store
 from game.state import (
     GameState, Report, ReportOption, ReportType, ReportStatus, RiskLevel,
     Effect, EffectType, TargetType, CouncilRole,
@@ -173,7 +174,15 @@ async def generate_report(
     try:
         response = await safe_claude_call(kwargs, fallback_tokens=4000, call_type="report_gen")
         record_usage("report_gen", response, turn=gs.turn, cycle=gs.cycle)
-    except Exception:
+    except Exception as exc:
+        store.log_dev(
+            "report_gen_error",
+            f"Claude call failed for domain '{domain}' player '{player_id}': {exc}",
+            turn=gs.turn,
+            cycle=gs.cycle,
+            domain=domain,
+            player_id=player_id,
+        )
         return None
 
     tool_use = next((b for b in response.content if b.type == "tool_use"), None)

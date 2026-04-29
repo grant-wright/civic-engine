@@ -229,11 +229,17 @@ async def advance_turn_endpoint(token: str = Query(...)):
 
     from game.engine import advance_turn
     from game.reports import schedule_reports
+    from game.factions import build_turn_summary, run_faction_reactions
     from claude.ai_player import make_ai_decision
 
     gs = store.game_state
+    log_len_before = len(gs.event_log)
     advance_turn(gs)
+    recent_events = gs.event_log[log_len_before:]
     await store.broadcast_game_state()
+
+    turn_summary = build_turn_summary(gs, recent_events)
+    store.fire_task(run_faction_reactions(gs, turn_summary))
 
     if gs.status == GameStatus.IN_GAME:
         await schedule_reports(gs)

@@ -164,10 +164,18 @@ async def end_turn(sid: str, data: dict | None = None):
         return
 
     from game.engine import advance_turn
+    from game.factions import build_turn_summary, run_faction_reactions
 
-    advance_turn(store.game_state)
+    gs = store.game_state
+    log_len_before = len(gs.event_log)
+    advance_turn(gs)
+    recent_events = gs.event_log[log_len_before:]
+
     await store.broadcast_game_state()
-    store.fire_task(_start_new_turn(store.game_state))
+    store.fire_task(_start_new_turn(gs))
+
+    turn_summary = build_turn_summary(gs, recent_events)
+    store.fire_task(run_faction_reactions(gs, turn_summary))
 
 
 @sio.event

@@ -140,6 +140,19 @@ class RoadRage:
     max_step_per_turn = 5.0    # road_rage_index moves no more than this per turn
 
 
+class FactionAlertThreshold:
+    """
+    Metric levels at which factions begin to notice conditions and react.
+    Used in game/factions.py build_turn_summary() to inject sensitivity keywords
+    so the faction_affected() filter routes Claude reaction calls correctly.
+    Spec: Factions & Aesthetic Index > Faction reaction generation (claude/citizens.py)
+    """
+    road_freight_high = 60.0        # road_freight_pct above this → freight_road, fiscal_prudence
+    horse_pollution_notable = 50.0  # horse_pollution above this → horse_pollution keyword
+    aesthetic_notable = 55.0        # aesthetic_index above this → aesthetic_index, heritage
+    polling_concerning = 60.0       # election_polling below this → election_polling, economic_equity
+
+
 class FactionSensitivity:
     """
     Per-faction reaction_threshold — how large a happiness delta triggers a
